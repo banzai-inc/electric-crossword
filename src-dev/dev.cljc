@@ -13,7 +13,7 @@
    (do
      (def config
        {:host "0.0.0.0"
-        :port 8080
+        :port 8084
         :resources-path "public/electric_starter_app"
         :manifest-path ; contains Electric compiled program's version so client and server stays in sync
         "public//electric_starter_app/js/manifest.edn"})
