@@ -4,10 +4,12 @@
 # see also: https://gist.github.com/subfuzion/db7f57fff2fb6998a16c
 .clj-kondo
 .clj-kondo/.cache
+.calva/output-window
 .cpcache
 .lsp
 .nrepl-port
 .shadow-cljs
+.vscode/
 node_modules
 /resources/public/electric_starter_app/js
 /resources/electric-manifest.edn
