@@ -2,19 +2,10 @@
   (:import [hyperfiddle.electric Pending])
   (:require [hyperfiddle.electric :as e]
             [hyperfiddle.electric-dom2 :as dom]
-            #?(:clj [clojure.pprint :refer [pprint]]
-               :cljs [cljs.pprint :refer [pprint]])
             [banzai.puzzle.crossword.core :as cw]
+            [banzai.puzzle.crossword.ui :as cw-ui :refer [coord-id focus-coord]]
+            #?(:cljs [banzai.puzzle.crossword.ui.browser :as cw-ui-browser])
             [clojure.string :as string]))
-
-(declare coord-id focus-coord)
-
-#?(:clj (defn describe-cw-puzzle [cw-puzzle]
-          (with-out-str
-            (pprint cw-puzzle))))
-#?(:clj (defn describe-cw-state [cw-state]
-          (with-out-str
-            (pprint cw-state))))
 
 (e/defn CrosswordPuzzleCluePane
   [{:keys [cells crossword/clues] :as cw-puzzle}
@@ -47,38 +38,6 @@
   [cw-puzzle cw-state]
   (e/client
     (cw/all-cells cw-puzzle cw-state)))
-
-(def coord-id
-  "Returns the cell element id for a coordinate."
-  pr-str)
-
-(defn keydown-event-data
-  [e]
-  {:key       (.-key e)
-   :shift-key (.-shiftKey e)
-   :ctrl-key  (.-ctrlKey e)
-   :alt-key   (.-altKey e)
-   :meta-key  (.-metaKey e)})
-
-(defn- keydown-command
-  [{:keys [key shift-key ctrl-key alt-key meta-key]} data]
-  (when-not (or ctrl-key alt-key meta-key)
-    (case key
-      "Tab"        ['select-coord (assoc data :find-coord/directives (if-not shift-key
-                                                                       [:find-coord/next-word-in-axis :find-coord/next-word]
-                                                                       [:find-coord/prev-word-in-axis :find-coord/prev-word]))]
-      "Backspace"  ['set-coord (assoc data :value nil :find-coord/directives [:find-coord/prev-in-word :find-coord/prev])]
-      "Delete"     ['set-coord (assoc data :value nil)]
-      "ArrowUp"    ['select-coord (assoc data :find-coord/directives [:find-coord/up :find-coord/prev-in-word :find-coord/prev])]
-      "ArrowLeft"  ['select-coord (assoc data :find-coord/directives [:find-coord/left :find-coord/prev-in-word :find-coord/prev])]
-      "ArrowDown"  ['select-coord (assoc data :find-coord/directives [:find-coord/down :find-coord/next-in-word :find-coord/next])]
-      "ArrowRight" ['select-coord (assoc data :find-coord/directives [:find-coord/right :find-coord/next-in-word :find-coord/next])]
-      nil)))
-
-(defn- focus-coord
-  [coord]
-  (and coord
-       #?(:cljs (some-> js/document (.getElementById (coord-id coord)) (.focus)))))
 
 (e/defn CrosswordPuzzleGridPane
   [{:keys [col-count row-count] :as cw-puzzle}
@@ -130,7 +89,7 @@
                                               (focus-coord next-coord)
                                               (set! (.-innerText (.-target e)) value)
                                               (.preventDefault e))))
-                (dom/on "keydown" (e/fn [e] (when-let [[_ args :as cmd] (keydown-command (keydown-event-data e) {:coord coord})]
+                (dom/on "keydown" (e/fn [e] (when-let [[_ args :as cmd] (cw-ui/keydown-command (cw-ui-browser/keydown-event-data e) {:coord coord})]
                                               (new ProcessCmd cmd)
                                               (when-let [next-coord (->> args :find-coord/directives (apply cw/find-coord cw-puzzle cw-state coord))]
                                                 (focus-coord next-coord)
@@ -155,8 +114,8 @@
         ;; (CrosswordPuzzleCluePane. cw-puzzle cw-state {:words-key :words-in-rows})
         (CrosswordPuzzleGridPane. cw-puzzle cw-state ProcessCmd)
         (CrosswordPuzzleCluePane. cw-puzzle cw-state ProcessCmd {:words-key :words}))
-      #_(dom/pre (dom/code (dom/text (e/server (describe-cw-state cw-state)))))
-      #_(dom/pre (dom/code (dom/text (e/server (describe-cw-puzzle cw-puzzle))))))))
+      #_(dom/pre (dom/code (dom/text (e/server (cw-ui/describe-cw-state cw-state)))))
+      #_(dom/pre (dom/code (dom/text (e/server (cw-ui/describe-cw-puzzle cw-puzzle))))))))
 
 (e/defn PuzzlePage [_ puzzle state]
   (e/server
