@@ -1,4 +1,39 @@
-# Electric Starter App
+# Crossword puzzle (Electric Clojure)
+
+![example puzzles](./doc/images/examples.png)
+
+* Designed for easy keyboard navigation within the browser, supporting arrow keys, tab, backspace, delete.
+* Note the minimal puzzle declaration (and it infers the across/down numbers for you):
+
+```clojure
+(def example-cw-puzzle
+  {:crossword/puzzle-string
+   "#  TEACH
+    #    N
+    #    STUDY
+    #    W  O
+    # G  E  N
+    # LEARN E
+    # U
+    #TEST WORD
+    #   A O
+    #   P R
+    #  DESK"
+   :crossword/clues
+   {"TEACH"  "Instruct a student"
+    "ANSWER" "Response to a question"
+    "STUDY"  "Learn from a resource (e.g. book)"
+    "GLUE"   "Used to stick one piece of paper to another"
+    "LEARN"  "Acquire knowledge"
+    "TEST"   "A graded set of questions for students"
+    "TAPE"   "Sticky strips often coming in rolls"
+    "WORK"   "Getting stuff done"
+    "WORD"   "A part of a sentence."
+    "DESK"   "A place to hold your school books and paper while you work."
+    "DONE"   "Complete"}})
+```
+
+# Based on the Electric Starter App
 
 A minimal Electric Clojure app, and instructions on how to integrate it into an existing app. For more demos and examples, see [Electric Fiddle](https://github.com/hyperfiddle/electric-fiddle).
 
@@ -19,6 +54,7 @@ clj -M:prod -m prod
 ```
 
 Uberjar (optional):
+
 ```
 clj -X:build:prod uberjar :build/jar-name "target/app.jar"
 java -cp target/app.jar clojure.main -m prod
