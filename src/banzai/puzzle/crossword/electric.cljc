@@ -7,7 +7,7 @@
             [banzai.puzzle.crossword.core :as cw]
             [clojure.string :as string]))
 
-;; #?(:cljs (set! hashp.core/print-opts (assoc hashp.core/print-opts :print-color false)))
+(declare coord-id focus-coord)
 
 #?(:clj (defn describe-cw-puzzle [cw-puzzle]
           (with-out-str
@@ -19,6 +19,7 @@
 (e/defn CrosswordPuzzleCluePane
   [{:keys [cells crossword/clues] :as cw-puzzle}
    cw-state
+   ProcessCmd
    {:keys [words-key] :or {words-key :words}}]
   (e/client
     (let [grouped-words (group-by cw/word->axis (get cw-puzzle words-key))]
@@ -36,7 +37,11 @@
                 (when (some (partial = (:selected-coord cw-state)) (cw/word->coords word))
                   (dom/props {:class [(if (= (:axis cw-state) (cw/word->axis word)) 'bg-yellow-100 'bg-slate-100)
                                       'font-bold]}))
-                (dom/text (:cell-num cell) ". " (get clues (cw/word->answer word)))))))))))
+               (dom/label (dom/props {:for (coord-id coord)
+                                      :class ['hover:bg-yellow-200 'cursor-pointer]})
+                 (dom/on "click" (e/fn [_](new ProcessCmd ['select-coord {:coord coord, :axis axis}])
+                                          (focus-coord coord)))
+                (dom/text (:cell-num cell) ". " (get clues (cw/word->answer word))))))))))))
 
 (e/defn all-cells
   [cw-puzzle cw-state]
@@ -57,13 +62,12 @@
 
 (defn- keydown-command
   [{:keys [key shift-key ctrl-key alt-key meta-key]} data]
-  (prn 'keydown-command key data)
   (when-not (or ctrl-key alt-key meta-key)
     (case key
       "Tab"        ['select-coord (assoc data :find-coord/directives (if-not shift-key
                                                                        [:find-coord/next-word-in-axis :find-coord/next-word]
                                                                        [:find-coord/prev-word-in-axis :find-coord/prev-word]))]
-      "Backspace"  ['set-coord (assoc data :value nil :find-coord/directives [:find-coord/prev-in-word])]
+      "Backspace"  ['set-coord (assoc data :value nil :find-coord/directives [:find-coord/prev-in-word :find-coord/prev])]
       "Delete"     ['set-coord (assoc data :value nil)]
       "ArrowUp"    ['select-coord (assoc data :find-coord/directives [:find-coord/up :find-coord/prev-in-word :find-coord/prev])]
       "ArrowLeft"  ['select-coord (assoc data :find-coord/directives [:find-coord/left :find-coord/prev-in-word :find-coord/prev])]
@@ -78,23 +82,23 @@
 
 (e/defn CrosswordPuzzleGridPane
   [{:keys [col-count row-count] :as cw-puzzle}
-   {:keys [selected-coord] :as cw-state}
+   {:keys [selected-coord selected-word axis] :as cw-state}
    ProcessCmd]
   (e/client
     (dom/div (dom/props {:class ['relative]})
-    ;;   (dom/div (dom/props {:class "bg-slate-500" :tabindex 1 :style {:height "50px" :width "50px"}})
-    ;;            (dom/on "focus" (e/fn asdfljkasdfh [e](ProcessCmd ['asdfljkasdfh]))))
       (dom/div (dom/props {:class '["-z-1" absolute w-full h-full bg-cover bg-center bg-no-repeat]})
         (dom/style {:background-image "url(https://static-app-misc.teachbanzai.com/img/income-and-expenses-thumb.jpg)"}))
       (dom/div (dom/props {:class '[grid m-6]
                            :style {:grid-template-columns (string/join " " (repeat col-count "3rem"))
                                    :grid-template-rows    (string/join " " (repeat row-count "3rem"))}})
-        ;; (prn 'cw-state cw-state)
-        (e/for-by first [[[r-idx c-idx :as coord] {:keys [cell-num current-value correct-letter locked]}]
+       (let [selected-word-coords (set (some-> selected-word cw/word->coords))]
+        (e/for-by first [[[r-idx c-idx :as cell] {:keys [cell-num current-value correct-letter locked]}]
                          (cw/all-cells cw-puzzle cw-state)]
-          (let [cell-format (if locked
-                              "bg-black border-black"
-                              "border-slate-500 border-2")
+          (let [coord [r-idx c-idx]
+                active-word? (contains? selected-word-coords coord)
+                cell-format (if locked
+                              `[bg-black border-black]
+                              `[border-slate-500 border-1])
                 text-format (if current-value "text-black" "text-slate-500")
                 focused-cell? (= selected-coord coord)]
             (when-not locked
@@ -103,15 +107,21 @@
                                     :contenteditable true
                                     :class [text-format cell-format
                                             (when-not locked "border")
+                                            (cond
+                                              focused-cell? 'bg-yellow-200
+                                              active-word? 'bg-blue-200
+                                              :else 'bg-white)
                                             'justify-center 'items-center
-                                            "text-xl bold grid items-center focus:outline-none focus:ring focus:ring-violet-300 height-[3rem] m-[-1px_-1px_0_0] caret-transparent"]}
+                                            "text-xl bold grid items-center focus:outline-none height-[3rem] m-[-1px_-1px_0_0] caret-transparent"]}
                              (not locked) (assoc :tabindex 0)))
                 (dom/style {:grid-row-start    (inc r-idx) ; Tailwind doesn't always find generated classes
                             :grid-column-start (inc c-idx)
-                            :background        "white"
                             :z-index           1})
-                (dom/on "click"   (e/fn [e] #_(js/console.log "click " (.-target e) e) (.focus (.-target e))))
-                (dom/on "focus"   (e/fn [_] (new ProcessCmd ['select-coord   {:coord coord}])))
+                (dom/on "click"   (e/fn [e] (when focused-cell?
+                                              (new ProcessCmd ['select-coord {:coord coord, :axis ({:across :down} axis :across)}]))
+                                            (.focus (.-target e))))
+                (dom/on "focus"   (e/fn [_] (new ProcessCmd ['select-coord {:coord coord}])
+                                            (focus-coord coord)))
                 (dom/on "blur"    (e/fn [_] (new ProcessCmd ['deselect-coord {:coord coord}])))
                 (dom/on "input"   (e/fn [e] (let [value (some-> (.-data e) string/upper-case)
                                                   next-coord (cw/find-coord cw-puzzle cw-state coord
@@ -136,23 +146,22 @@
                             :grid-column-start (inc c-idx)})
                 (dom/sup (dom/props {:class ['text-slate-800 'relative 'm-1]})
                   (dom/style {:z-index 2})
-                  (dom/text (str cell-num))))))))))))
+                  (dom/text (str cell-num)))))))))))))
 
 (e/defn CrosswordPuzzle [cw-puzzle cw-state ProcessCmd]
   (e/client
     (dom/div
       (dom/div (dom/props {:class "grid lg:grid-cols-2 m-4"})
-        ;; e/watch
         ;; (CrosswordPuzzleCluePane. cw-puzzle cw-state {:words-key :words-in-rows})
         (CrosswordPuzzleGridPane. cw-puzzle cw-state ProcessCmd)
-        (CrosswordPuzzleCluePane. cw-puzzle cw-state {:words-key :words}))
-      (dom/pre (dom/code (dom/text (e/server (describe-cw-state cw-state)))))
-      (dom/pre (dom/code (dom/text (e/server (describe-cw-puzzle cw-puzzle))))))))
+        (CrosswordPuzzleCluePane. cw-puzzle cw-state ProcessCmd {:words-key :words}))
+      #_(dom/pre (dom/code (dom/text (e/server (describe-cw-state cw-state)))))
+      #_(dom/pre (dom/code (dom/text (e/server (describe-cw-puzzle cw-puzzle))))))))
 
-(e/defn PuzzlePage [_]
+(e/defn PuzzlePage [_ puzzle state]
   (e/server
-    (let [!cw (atom {:puzzle (cw/comprehend-puzzle cw/example-cw-puzzle)
-                     :state  cw/example-cw-state})
+    (let [!cw (atom {:puzzle (cw/comprehend-puzzle (or puzzle cw/example-cw-puzzle))
+                     :state  (or state cw/example-cw-state)})
           cw (e/watch !cw)]
       (e/client
         (let [ProcessCmd (e/fn process-c-cmd [cmd]
@@ -163,6 +172,10 @@
                                   (assert (fn? update-state))
                                   (swap! !cw update :state update-state))
                                 result)))]
-            (dom/h1 (dom/props {:class "text-xl"}) (dom/text "Crossword in Electric Clojure"))
+            (dom/h1 (dom/props {:class "text-xl"}) (dom/text "Crossword in ")
+               (dom/a (dom/props {:href "https://electric.hyperfiddle.net/"
+                                  :target "_blank"
+                                  :class "cursor-pointer text-blue-500"})
+                 (dom/text "Electric Clojure")))
             (let [{:keys [puzzle state]} (e/server cw)]
               (CrosswordPuzzle. puzzle state ProcessCmd)))))))

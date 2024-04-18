@@ -30,15 +30,36 @@
     "DESK"   "A place to hold your school books and paper while you work."
     "DONE"   "Complete"}})
 
+(def nyt-cw-puzzle-2024-04-18
+  {:crossword/puzzle-string
+   "#BANJO
+    #ALOUD
+    #GENIE
+    #EXECS
+    #LATE"
+   :crossword/clues
+   {"BANJO"  "Bluegrass instrument"
+    "ALOUD"  "Audible way to think"
+    "GENIE"  "Aladdin character whose first line is 'Oy! 10,000 years will give you such a crick in the neck`'"
+    "EXECS"  "Members of a company's C-suite"
+    "LATE"   "Behind schedule"
+    "BAGEL"   "The schmear goes here"
+    "ALEXA"   "Amazon's assistant"
+    "NONET"   "Group of nine"
+    "JUICE"   "Batter life, informally"
+    "ODES"   "Poems like 'to Autumn' and 'To a Skylark'"}})
+
 (def example-cw-state
-  {:current {#_#_[0 5] "A"}})
+  {:current {#_#_[0 5] "A"}
+   :axis :across
+   :selected-cell [0 0]})
 
 (defn- word->coord
   "Gets the starting coordinate from a word."
   [[r-idx c-idx]]
   [r-idx c-idx])
 
-(defn- word->coords
+(defn word->coords
   "Gets the coordinates of a word."
   [[r-idx c-idx answer axis]]
   (let [[r* c*] (case axis :across [0 1] :down [1 0])]
@@ -57,7 +78,6 @@
 (defmulti mutate
   "Given `{:puzzle {...}, :state {...}} [op arg1...]`
    dispatches on op,
-   ;; not supported? optionally performing a side-effect with `:server/effect` and/or `:client/effect` (an arity-0 fn),
    optionally returning a state-mutation with `:update-state` (an arity-1 fn of old-state to new-state),
    optionally returning a result with `:result`
 
@@ -76,24 +96,31 @@
        :default (binding [*out* *err*](apply println msg-parts)))))
 
 (defn update-axis
-  [{:keys [selected-coord axis] :as st} {:keys [cells] :as puzzle}]
+  [{:keys [selected-coord axis] :as st} {:keys [cells] :as _puzzle}]
   (let [axises-at-coord (into #{} (map word->axis) (get-in cells [selected-coord :words]))]
     (cond-> st
         (not (contains? axises-at-coord axis)) (assoc :axis (first (seq axises-at-coord))))))
+
+(defn update-selected-word
+  [{:keys [selected-coord axis] :as st} {:keys [cells] :as _puzzle}]
+  (let [word (some #(and (= axis (word->axis %)) %)
+                   (get-in cells [selected-coord :words]))]
+    (assoc st :selected-word word)))
 
 (defmethod mutate 'deselect-coord deselect-coord
   [_puz-st [op {:keys [coord]}]]
   {:update-state (fn update-st [{:keys [selected-coord] :as st}]
                    (cond-> st
-                     (= coord selected-coord) (dissoc :selected-coord)))
-   #_#_:result (pr-str "deselecting" coord)})
+                     (= coord selected-coord) (dissoc :selected-coord)))})
 
 (defmethod mutate 'select-coord select-coord
-  [{:keys [puzzle]} [_op {:keys [coord]}]]
-  {:update-state (fn update-st [{:keys [selected-coord] :as st}]
+  [{:keys [puzzle]} [_op {:keys [coord axis]}]]
+  {:update-state (fn update-st [st]
                    (-> st
                        (assoc :selected-coord coord)
-                       (update-axis puzzle)))
+                       (update :axis #(or axis %))
+                       (update-axis puzzle)
+                       (update-selected-word puzzle)))
    :result (pr-str "selecting" coord)})
 
 (defmethod mutate 'set-coord set-coord
@@ -103,6 +130,7 @@
                              (-> st
                                  (assoc-in [:current coord] value)))
                                 ;;  (update-axis puzzle)))
+             :result (pr-str "set" coord "to" value))))
 
 (defmethod mutate 'set-axis set-axis
   [_puz-st [op {:keys [axis] :as data}]]
@@ -286,10 +314,8 @@
                         (and (string/blank? current-value)
                              (some #(= axis (word->axis %)) words)
                              n-coord))))
-           :find-coord/next-empty (do
-                                    (prn (sequence (comp (map second)(keep :cell-num) ) (concat after before)))
-                                    (->> (concat after before)
-                                         (some (fn f-nxt-empty [[n-coord {:keys [words current-value]}]]
-                                                 (and (string/blank? current-value) words n-coord))))))
-         (do
-          (recur directives)))))))
+           :find-coord/next-empty
+           (->> (concat after before)
+                (some (fn f-nxt-empty [[n-coord {:keys [words current-value]}]]
+                        (and (string/blank? current-value) words n-coord)))))
+         (recur directives))))))
